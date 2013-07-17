@@ -15,8 +15,8 @@
 
 # MySQL settings - You can get this info from your web host
 # The name of the database for WordPress#
-if ( file_exists( dirname( __FILE__ ) . '/local-config.php' ) ) {
-	include( dirname( __FILE__ ) . '/local-config.php' );
+if ( file_exists( dirname( __FILE__ ) . '/wp-config.local.php' ) ) {
+	include( dirname( __FILE__ ) . '/wp-config.local.php' );
 } else {
 define('DB_NAME', 'putyourdbnamehere');
 

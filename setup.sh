@@ -36,9 +36,24 @@ Colors() {
 Colors;
 
 # PROJECT init
-echo -e ${YellowF}"Project slug (lowercase, no spaces):"${Reset}
+echo -e ${YellowF}"Project Name:"${Reset}
+read -e PROJECT_NAME
+
+
+PREP_SLUG=${PROJECT_NAME//[^a-zA-Z0-9\-]/-}
+PROJECT_FOLDER=$(echo ${PREP_SLUG} | tr '[A-Z]' '[a-z]')
+PROJECT_DB_NAME=${PROJECT_FOLDER//[^a-zA-Z0-9]/_}
+PROJECT_SLUG=$(${WP_TOOLS_PATH}/db-name-sani.php ${PREP_SLUG})
+
+echo -e ${YellowF}"Project slug (lowercase, no spaces, 2-4 characters) [${PROJECT_SLUG}]:"${Reset}
 read -e PROJECT
-CLEAN_PROJECT=${PROJECT//[^a-zA-Z0-9]/}
+
+if [ -z "$PROJECT"] ; then
+		PROJECT=$PROJECT_SLUG
+	fi
+
+HTTPDOCS="$ORIGDIR/$PROJECT_FOLDER"
+CNF="$ORIGDIR/$PROJECT"
 
 # Create Project REPO
 
@@ -53,76 +68,43 @@ if [ "$SETUP_REPO" == "y" ] ; then
 	echo "Password: "
 	read -s BB_PASS
 
-echo "-u$BB_USER:$BB_PASS -X POST -d 'name=$PROJECT' -d 'owner=$BB_Owner' -d 'is_private=1' -d 'scm=git' https://api.bitbucket.org/1.0/repositories/"
+	curl -u$BB_USER:$BB_PASS -X POST -d "name=$PROJECT_NAME" -d "owner=$BB_Owner" -d 'is_private=1' -d 'scm=git' https://api.bitbucket.org/1.0/repositories/
 
-	curl -u$BB_USER:$BB_PASS -X POST -d "name=$PROJECT" -d "owner=$BB_Owner" -d 'is_private=1' -d 'scm=git' https://api.bitbucket.org/1.0/repositories/
+	git clone https://$BB_USER:$BB_PASS@bitbucket.org/$BB_Owner/$PROJECT_FOLDER.git $HTTPDOCS
 
-	git clone https://$BB_USER:$BB_PASS@bitbucket.org/$BB_Owner/$PROJECT.git
-
-	HTTPDOCS="$ORIGDIR/$PROJECT"
-	CNF="$ORIGDIR/$PROJECT"
 	GIT_PATH="$HTTPDOCS/.git/hooks"
 fi
 
 if [ "$SETUP_REPO" != "y" ] ; then
-	mkdir $PROJECT
-	HTTPDOCS="$ORIGDIR/$PROJECT"
+	mkdir $HTTPDOCS
 fi
 
 cd $HTTPDOCS
 
 
 
-# CNF
-# TODO: Recreate cases where we don't create the repo
-#echo "Creating cnf directory..."
-
-
-#if [ -d $CNF ] ; then
-#	echo "Removing existing cnf directory...";
-#	rm -rf $CNF;
-#fi
-#mkdir "$CNF"
-#echo -e ${GreenF}"cnf dir created"${Reset}
-
-# MySQL DB
 echo -e ${YellowF}"Creating LOCAL MySQL DB"${Reset}
 
-echo "Database Name: [$CLEAN_PROJECT]"
-	read -e LOCAL_DB_NAME
-	if [ -z "$LOCAL_DB_NAME"] ; then
-		LOCAL_DB_NAME=$CLEAN_PROJECT
-	fi
+echo "Database Name: [$PROJECT_DB_NAME]"
+
 echo "Database User: "
 read -e LOCAL_DB_USER
 echo "Database Password: "
 read -s LOCAL_DB_PASS
-
-Q1="CREATE DATABASE IF NOT EXISTS $LOCAL_DB_NAME;"
-Q2="GRANT ALL ON *.* TO '$LOCAL_DB_USER'@'localhost' IDENTIFIED BY '$LOCAL_DB_PASS';"
-Q3="FLUSH PRIVILEGES;"
-SQL="${Q1}${Q2}${Q3}"
-
-echo -e ${YellowF}"Running SQL statement"${Reset}
-
-MYSQL=`which mysql`
-$MYSQL -uroot -p$LOCAL_DB_PASS -e "$SQL"
-
-echo -e ${GreenF}"$LOCAL_DB_NAME DB created"${Reset}
 
 if [ "$SETUP_REPO" == "y" ] ; then
 	echo -e ${YellowF}"Adding git hooks for DB VCS"${Reset}
 	cp $WP_TOOLS_PATH'/skeleton/pre-commit' $GIT_PATH'/pre-commit'
 	sed -i.bak 's/dbuser/'$LOCAL_DB_USER'/g' $GIT_PATH/pre-commit
 	sed -i.bak 's/dbpassword/'$LOCAL_DB_PASS'/g' $GIT_PATH/pre-commit
-	sed -i.bak 's/dbname/'$LOCAL_DB_NAME'/g' $GIT_PATH/pre-commit
+	sed -i.bak 's/dbname/'$PROJECT_DB_NAME'/g' $GIT_PATH/pre-commit
 	sed -i.bak 's|projectpath|'$HTTPDOCS'|g' $GIT_PATH/pre-commit
 	chmod +x $GIT_PATH/pre-commit
 
 	cp $WP_TOOLS_PATH'/skeleton/post-merge' $GIT_PATH'/post-merge'
 	sed -i.bak 's/dbuser/'$LOCAL_DB_USER'/g' $GIT_PATH/post-merge
 	sed -i.bak 's/dbpassword/'$LOCAL_DB_PASS'/g' $GIT_PATH/post-merge
-	sed -i.bak 's/dbname/'$LOCAL_DB_NAME'/g' $GIT_PATH/post-merge
+	sed -i.bak 's/dbname/'$PROJECT_DB_NAME'/g' $GIT_PATH/post-merge
 	sed -i.bak 's|projectpath|'$HTTPDOCS'|g' $GIT_PATH/post-merge
 	chmod +x $GIT_PATH/post-merge
 fi
@@ -131,57 +113,26 @@ fi
 echo -e ${YellowF}"Running wp core download in httpdocs..."${Reset}
 cd "$HTTPDOCS"
 wp core download
+wp db create
 echo -e ${GreenF}"WordPress Core downloaded"${Reset}
 
-echo -e ${YellowF}"Getting settings.php..."${Reset}
-#wget -P "$CNF" https://gist.github.com/raw/4009181/4dfcbf074ccc4b5f0b1c8bea1c04de2789a9ae76/settings.php
-cp $WP_TOOLS_PATH'/skeleton/local-config.php' $HTTPDOCS'/local-config.php'
-
-echo -e ${YellowF}"Editing local-config.php..."${Reset}
-cd $HTTPDOCS
-sed -i.bak 's/putyourdbnamehere/'$LOCAL_DB_NAME'/g' $HTTPDOCS/local-config.php
-sed -i.bak 's/usernamehere/'$LOCAL_DB_USER'/g' $HTTPDOCS/local-config.php
-sed -i.bak 's/yourpasswordhere/'$LOCAL_DB_PASS'/g' $HTTPDOCS/local-config.php
-echo -e ${GreenF}"settings edited"${Reset}
-
-echo -e ${YellowF}"Editing wp-config.php..."${Reset}
-cp $WP_TOOLS_PATH'/skeleton/wp-config.php' $HTTPDOCS'/wp-config.php'
-cd $HTTPDOCS
 rm wp-config-sample.php
-
-echo -e ${YellowF}"Do you have the live DB credentials? (y/n):"${Reset}
-read -e PRODUCTION_DB_SETUP
-
-if [ "$PRODUCTION_DB_SETUP" == "y" ] ; then
-	echo "Database Name: "
-	read -e DB_NAME
-	echo "Database User: "
-	read -e DB_USER
-	echo "Database Password: "
-	read -s DB_PASS
-
-	sed -i.bak 's/putyourdbnamehere/'$DB_NAME'/g' ./wp-config.php
-	sed -i.bak 's/usernamehere/'$DB_USER'/g' ./wp-config.php
-	sed -i.bak 's/yourpasswordhere/'$DB_PASS'/g' ./wp-config.php
-fi
-
-# cleanup, remove any file backup files created.
-rm -r *.bak
+rm README.txt
+rm license.txt
 
 #TODO: Autogenerate SALTS?
 #SECRET_KEYS="wget https://api.wordpress.org/secret-key/1.1/salt"
 #sed -i.bak 's/WPT_SECRET_KEYS/'$SECRET_KEYS'/g' ./wp-config.php
-echo -e ${YellowF}"wp-config.php written"${Reset}
 
 
 
 # Install site
 echo -e ${YellowF}"Installing WordPress..."${Reset}
 
-echo "URL [http://127.0.0.1/$PROJECT]: "
+echo "URL [http://127.0.0.1/$PROJECT_FOLDER]: "
 read -e SITEURL
 	if [ -z "$SITEURL"] ; then
-		SITEURL="http://127.0.0.1/$PROJECT"
+		SITEURL="http://127.0.0.1/$PROJECT_FOLDER"
 	fi
 echo "Title: "
 read -e SITETITLE
@@ -210,11 +161,14 @@ wp plugin install backwpup
 wp plugin install developer
 wp plugin install google-analytics-for-wordpress
 wp plugin install advanced-custom-fields
-#wp plugin install w3-total-cache
-#wp plugin install all-in-one-seo-pack
 wp plugin install rewrite-rules-inspector
 
+wget https://github.com/CaavaDesign/caava-helper/archive/master.zip -O master.zip
+wp plugin install master.zip
+rm master.zip
+
 wp plugin delete hello
+wp plugin delete akismet
 
 wp plugin update-all
 
@@ -227,29 +181,27 @@ fi
 
 echo "Admin Website: "
 read -e SITEADMIN_URI
-echo "Theme Description: "
-read -e THEME_DESCRIPTION
 
 echo ${YellowF}"Installing _S Theme with project information..."
 
+THEME_DIR="$HTTPDOCS/wp-content/themes/$PROJECT_SLUG"
+SASS_DIR="$THEME_DIR/scss"
+
+
 ## Install theme
-cd wp-content/themes
-curl -d underscoresme_name="$SITETITLE" -d underscoresme_slug="$PROJECT" -d underscoresme_author="$SITEADMIN_NAME" -d underscoresme_author_uri="$SITEADMIN_URI" -d underscoresme_description="$THEME_DESCRIPTION" -d underscoresme_generate_submit="Generate" -d underscoresme_generate="1" http://underscores.me > underscores.zip
-unzip underscores && rm underscores.zip
+wp scaffold _s $PROJECT_SLUG --theme_name="$SITETITLE" --author="$SITEADMIN_NAME" --author_uri="$SITEADMIN_URI" --activate
 cd "$HTTPDOCS"
 
-wp theme activate $PROJECT
 
-### Sass support
 
-#git clone git://github.com/sanchothefat/wp-sass.git wp-content/plugins/wp-sass
-#cd wp-content/plugins/wp-sass && git submodule update --init --recursive && cd /var/www/$PROJECT
+git clone --recursive git@github.com:csswizardry/inuit.css-web-template.git $SASS_DIR
+cd $SASS_DIR
+mv css/* .
+rm -rf README.md .git .gitmodules go index.html css watch
+wget https://raw.github.com/csswizardry/csswizardry-grids/master/csswizardry-grids.scss -O $SASS_DIR/csswizardry-grids.scss
 
-### Semantic.gs
-
-#cd wp-content/themes/bones/library/scss
-#wget https://raw.github.com/twigkit/semantic.gs/master/stylesheets/scss/grid.scss -O _grid.scss
-#cd "$ORIGDIR/httpdocs"
+cd $THEME_DIR
+touch front-page.php
 
 # Server user and group
 #chown www-data * -R
