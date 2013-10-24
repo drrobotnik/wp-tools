@@ -68,9 +68,11 @@ if [ "$SETUP_REPO" == "y" ] ; then
 	echo "Password: "
 	read -s BB_PASS
 
-	curl -u$BB_USER:$BB_PASS -X POST -d "name=$PROJECT_NAME" -d "owner=$BB_Owner" -d 'is_private=1' -d 'scm=git' https://api.bitbucket.org/1.0/repositories/
+	curl -u$BB_USER:$BB_PASS -X POST https://api.bitbucket.org/1.0/repositories/ -d "name=$PROJECT_NAME" -d "owner=$BB_Owner" -d 'is_private=1' -d 'scm=git'
+	curl -u$BB_USER:$BB_PASS -X POST https://api.bitbucket.org/1.0/repositories/$BB_Owner/$PROJECT_FOLDER/services -d type=POST -d URL=http://client.caava.co/deploy.php
 
-	git clone https://$BB_USER:$BB_PASS@bitbucket.org/$BB_Owner/$PROJECT_FOLDER.git $HTTPDOCS
+	# git clone https://$BB_USER:$BB_PASS@bitbucket.org/$BB_Owner/$PROJECT_FOLDER.git $HTTPDOCS // replaced for ssh
+	git clone git@bitbucket.org:$BB_Owner/$PROJECT_FOLDER.git $HTTPDOCS
 
 	GIT_PATH="$HTTPDOCS/.git/hooks"
 fi
@@ -117,8 +119,7 @@ wp db create
 echo -e ${GreenF}"WordPress Core downloaded"${Reset}
 
 rm wp-config-sample.php
-rm README.txt
-rm license.txt
+rm readme.html license.txt
 
 #TODO: Autogenerate SALTS?
 #SECRET_KEYS="wget https://api.wordpress.org/secret-key/1.1/salt"
@@ -151,7 +152,7 @@ if [ "$SITERUN" != "y" ] ; then
   exit
 fi
 
-wp core install --url=$SITEURL --title=$SITETITLE --admin_name=$SITEADMIN --admin_email=$SITEMAIL --admin_password=$SITEPASS
+wp core install --url=$SITEURL --title="$SITETITLE" --admin_name=$SITEADMIN --admin_email=$SITEMAIL --admin_password=$SITEPASS
 
 wp rewrite structure %category%/%postname%
 
