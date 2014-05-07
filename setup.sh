@@ -48,8 +48,8 @@ PROJECT_SLUG=$(${WP_TOOLS_PATH}/db-name-sani.php ${PREP_SLUG})
 echo -e ${YellowF}"Project slug (lowercase, no spaces, 2-4 characters) [${PROJECT_SLUG}]:"${Reset}
 read -e PROJECT
 
-if [ -z "$PROJECT"] ; then
-		PROJECT=$PROJECT_SLUG
+if [ -z "$PROJECT" ] ; then
+		PROJECT="$PROJECT_SLUG"
 	fi
 
 HTTPDOCS="$ORIGDIR/$PROJECT_FOLDER"
@@ -131,8 +131,8 @@ rm readme.html license.txt
 echo -e ${YellowF}"Installing WordPress..."${Reset}
 
 echo "URL [http://127.0.0.1/$PROJECT_FOLDER]: "
-read -e SITEURL
-	if [ -z "$SITEURL"] ; then
+read -r SITEURL
+	if [ -z "$SITEURL" ] ; then
 		SITEURL="http://127.0.0.1/$PROJECT_FOLDER"
 	fi
 echo "Title: "
